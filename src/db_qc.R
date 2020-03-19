@@ -16,6 +16,7 @@ create_dataset_summary_stats <- function(db, data_set_codes, time) {
     } else {
       row <- dbGetQuery(db, paste("SELECT COUNT() AS NO_RECORDS FROM ", t))
       row$NO_DUPLICATES = "NA"
+      row$PCT_DUPLICATE = "NA"
     }
     datasets <- rbind(datasets,row)
   }
@@ -42,6 +43,7 @@ create_file_summary_stats <- function(db, data_set_codes, time) {
     } else {
       row <- dbGetQuery(db, paste("SELECT COUNT() AS NO_RECORDS FROM ", t, " GROUP BY FILENAME"))
       row$NO_DUPLICATES = "NA"
+      row$PCT_DUPLICATE = "NA"
     }
     row[3] <- dbGetQuery(db, paste("SELECT DISTINCT FILENAME FROM ", t))
     files <- rbind(files,row)
