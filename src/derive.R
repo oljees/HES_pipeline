@@ -168,7 +168,8 @@ derive_dod_filled <- function(data) {
   })
 }
 
-# Derive EPIDUR_CALC column, by calculating the 
+# Derive EPIDUR_CALC column, by calculating an 
+# episodes duration.
 # Requires a dataframe.
 # Returns a modifed dataframe.
 derive_epidur_calc <- function(data) {
@@ -176,6 +177,25 @@ derive_epidur_calc <- function(data) {
                 %in% names(data))) {
     mutate(data, EPIDUR_CALC = as.numeric(as.Date(EPIEND, format = "%Y-%m-%d") 
                                           - as.Date(EPISTART, format = "%Y-%m-%d")))
+  } else {
+    data
+  })
+}
+
+
+# Derive EPI_VALID column, by defining where an episode is valid.
+# Requires a dataframe.
+# Returns a modifed dataframe.
+derive_epi_valid <- function(data, cols) {
+  return(if(all(cols %in% names(data))) {
+    mutate(data, EPI_VALID = case_when(ENCRYPTED_HESID_MISSING == FALSE &
+                                         ADMIDATE_MISSING == FALSE &
+                                         PROCODE3_MISSING == FALSE &
+                                         EPISTAT == 3 &
+                                         !is.na(EPIKEY) &
+                                         !is.na(EPISTART) &
+                                         !is.na(EPIEND) ~ TRUE,
+                                       TRUE ~ FALSE))
   } else {
     data
   })
@@ -216,6 +236,10 @@ derive_HES <- function(data, filename, tidy_log) {
            derive_new(cols = c("AEATTENDCAT", "DUPLICATE"), new_col = "UNPLANNED", v = FALSE) %>% 
            derive_new(cols = c("AEATTENDDISP", "DUPLICATE"), new_col = "SEEN", v = FALSE) %>% 
            derive_new(cols = c("AEATTENDCAT", "DUPLICATE", "UNPLANNED", "SEEN"), 
-                      new_col = "UNPLANNED_SEEN", v = FALSE))
+                      new_col = "UNPLANNED_SEEN", v = FALSE) %>%
+           derive_new(cols = APC_cols, new_col = "NEW_SPELL", v = NA) %>%
+           derive_new(cols = APC_cols, new_col = "SPELL_ID", v = NA) %>%
+           derive_new(cols = APC_cols, new_col = "DISDATE_MISSING", v = FALSE) %>%
+           derive_epi_valid(cols = APC_cols))
 }
 
