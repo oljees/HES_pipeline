@@ -24,11 +24,12 @@ build_database <- function(data_path, db, data_set_codes, chunk_sizes,
 }
 
 
-# Identifies duplicates and updates database with result
+# Identifies duplicates and spell information
+# and updates database with result
 # Requires an S4 MySQLConnection.
 # Writes to database as side effect.
 # Returns nothing.
-modify_database <- function(db, data_set_codes) {
+modify_database <- function(db, data_set_codes, expected_headers) {
   log_info("Updating database...")
   if("AE" %in% data_set_codes){
     if("DUPLICATE" %in% dbListFields(db, "AE")) {
@@ -77,6 +78,19 @@ modify_database <- function(db, data_set_codes) {
       APC_group_by <- c("ENCRYPTED_HESID","EPISTART","EPIEND","EPIORDER","PROCODE3","ADMIDATE_FILLED","DISDATE","TRANSIT")
       APC_order_by <- c("ROWQUALITY", "SUBDATE", "EPIKEY")
       flag_duplicates(db = db, table = "APC", group_by_vars = APC_group_by, order_by_vars = APC_order_by)
+      if(all(c("NEW_SPELL", "SPELL_ID", "DISDATE_MISSING") %in% dbListFields(db, "APC"))) {
+        set_new_spell(db)
+        set_not_new_spell(db, search_query = not_new_spell_query_1)
+        set_not_new_spell(db, search_query = not_new_spell_query_2)
+        set_not_new_spell(db, search_query = not_new_spell_query_3)
+        update_spell_ids(db)
+        create_inpatient_spells_table(db, expected_headers)
+        update_var(db, table = "APC", var = "DISDATE_MISSING", value = TRUE,
+                   condition_query = "WHERE DISDATE IS NULL")
+      } else {
+        log_info("NEW_SPELL and/or SPELL_ID variable(s) not present in APC table, can't create APCS table")
+      }
+      log_info("Updating APC table complete.")
     } else {
       log_info("Unable to flag duplicates in APC dataset, not all required columns present. 
                 Check definition of duplicates.")
@@ -85,7 +99,6 @@ modify_database <- function(db, data_set_codes) {
     log_info("APC dataset not updated, does not exist in the database")
   }
   log_info("Updating database complete.")
-  
 }
 
 
@@ -116,7 +129,7 @@ quality_control <- function(db, database_path, time) {
   
 }
 
-
+  
 # Sets up logging environment when a database build is started.
 # Creates pipeline amnd tidying log files.# Creates pipeline amnd tidying log files.
 # Requires a path to location of the database.
@@ -151,8 +164,7 @@ load_additional_data <- function(IMD_15_csv = NULL, IMD_19_csv = NULL, CCG_xlsx 
     IMD_data <- NULL
     log_info("No IMD data supplied")
   }
-  
-  
+
   if(!is.null(CCG_xlsx)) {
     CCG_data <- load_health_systems_data(CCG_xlsx)
     log_info("Using CCG data")
@@ -160,10 +172,9 @@ load_additional_data <- function(IMD_15_csv = NULL, IMD_19_csv = NULL, CCG_xlsx 
     CCG_data <- NULL
     log_info("No CCG data provided")
   }
-  
   return(list(IMD_data, CCG_data))
-}
-
+}  
+  
 
 # Main fn for building an initial database. Will build a database and then update some columns.
 # Requires a valid directory path to the data, a path to the database, a character vector of dataset codes, 
@@ -292,8 +303,8 @@ pipeline <- function(data_path, database_path, data_set_codes, chunk_sizes = c(1
       run_update(data_path, database_path, data_set_codes, chunk_sizes, expected_headers_file, 
                       IMD_15_csv, IMD_19_csv, CCG_xlsx, coerce)
     }
-    
   }, error = function(err.msg) {
     log_error(toString(err.msg))
   })
 }
+
